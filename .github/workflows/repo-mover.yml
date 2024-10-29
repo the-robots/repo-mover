@@ -31,13 +31,21 @@ jobs:
         run: |
           echo "${{ secrets.PRIVATE_KEY }}" > private-key.pem
           node -e "
-          const { App } = require('@octokit/app');
+          const { createAppAuth } = require('@octokit/auth-app');
           const fs = require('fs');
-          const appId = '${{ secrets.APP_ID }}';
-          const privateKey = fs.readFileSync('private-key.pem', 'utf8');
-          const app = new App({ appId, privateKey });
-          const jwt = app.getSignedJsonWebToken();
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `jwt=${jwt}\n`);
+          
+          const auth = createAppAuth({
+            appId: process.env.APP_ID,
+            privateKey: fs.readFileSync('private-key.pem', 'utf8')
+          });
+
+          auth({ type: 'app' }).then(appAuth => {
+            const jwt = appAuth.token;
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `jwt=${jwt}\n`);
+          }).catch(error => {
+            console.error('Failed to generate JWT:', error);
+            process.exit(1);
+          });
           "
 
       - name: Exchange JWT for Installation Token
