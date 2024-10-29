@@ -55,14 +55,14 @@ jobs:
             auth({ type: 'app' }).then(appAuth => {
               const jwt = appAuth.token;
 
-              const outputPath = process.env.GITHUB_OUTPUT || '/github/workflow/output';
+              const outputPath = process.env.GITHUB_OUTPUT;
               if (!outputPath) {
                 console.error('GITHUB_OUTPUT is not defined.');
                 process.exit(1);
               }
 
-              // Correctly write JWT to the output path
-              fs.appendFileSync(outputPath, `jwt=${jwt}\n`, { encoding: 'utf8' });
+              // Correctly write JWT to the output path using single quotes for consistency
+              fs.appendFileSync(outputPath, 'jwt=' + jwt + '\n', { encoding: 'utf8' });
 
               console.log('JWT successfully generated and written to output.');
             }).catch(error => {
