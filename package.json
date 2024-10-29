@@ -1,0 +1,7 @@
+{
+  "name": "repo-mover",
+  "version": "1.0.0",
+  "dependencies": {
+    "@octokit/app": "12.0.3"
+  }
+}
