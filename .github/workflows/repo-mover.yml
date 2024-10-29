@@ -37,7 +37,7 @@ jobs:
           const privateKey = fs.readFileSync('private-key.pem', 'utf8');
           const app = new App({ appId, privateKey });
           const jwt = app.getSignedJsonWebToken();
-          fs.writeFileSync(process.env.GITHUB_OUTPUT, `jwt=${jwt}\n`, { flag: 'a' });
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `jwt=${jwt}\n`);
           "
 
       - name: Exchange JWT for Installation Token
