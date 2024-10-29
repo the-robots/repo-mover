@@ -18,17 +18,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Set up Node.js environment
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
+      - name: Check out Repository
+        uses: actions/checkout@v3
 
-      - name: Install Dependencies
-        run: npm install @octokit/app@12.0.3 @octokit/auth-app@3.0.0
-
-      - name: Decode Private Key
+      - name: Install GPG and Dependencies
         run: |
-          echo "${{ secrets.PRIVATE_KEY_BASE64 }}" | base64 --decode > private-key.pem
+          sudo apt-get update
+          sudo apt-get install -y gnupg
+
+      - name: Decrypt Private Key
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
+            -o private-key.pem \
+            -d .github/keys/your-private-key.pem.gpg
+
+      - name: Install Octokit Dependencies
+        run: npm install @octokit/app@12.0.3 @octokit/auth-app@3.0.0
 
       - name: Generate JWT for GitHub App
         id: auth
