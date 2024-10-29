@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: '16'
 
-      - name: Authenticate GitHub App
+      - name: Generate JWT for GitHub App
         id: auth
         run: |
           echo "${{ secrets.PRIVATE_KEY }}" > private-key.pem
@@ -34,10 +34,19 @@ jobs:
           console.log(`::set-output name=jwt::${jwt}`);
           "
 
+      - name: Exchange JWT for Installation Token
+        id: token
+        run: |
+          INSTALLATION_ID=$(curl -s -H "Authorization: Bearer ${{ steps.auth.outputs.jwt }}" -H "Accept: application/vnd.github.v3+json" https://api.github.com/app/installations | jq '.[0].id')
+          INSTALLATION_TOKEN=$(curl -s -X POST -H "Authorization: Bearer ${{ steps.auth.outputs.jwt }}" -H "Accept: application/vnd.github.v3+json" https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens | jq -r '.token')
+          echo "::set-output name=token::${INSTALLATION_TOKEN}"
+
+      - name: Authenticate with GitHub CLI
+        run: |
+          echo "${{ steps.token.outputs.token }}" | gh auth login --with-token
+
       - name: Export Repository
         run: |
-          jwt="${{ steps.auth.outputs.jwt }}"
-          gh auth login --with-token <<< "$jwt"
           ARCHIVE_PATH="/tmp/${{ inputs.repo_name }}.tar.gz"
           echo "Exporting repository..."
           gh gei archive create "${{ inputs.source_org }}/${{ inputs.repo_name }}" --output "$ARCHIVE_PATH"
@@ -48,19 +57,26 @@ jobs:
           SIZE=$(du -BG "$ARCHIVE_PATH" | cut -f1 | tr -d 'G')
           echo "::set-output name=size::$SIZE"
 
-      - name: Conditionally Upload LFS Objects to S3
-        if: steps.size_check.outputs.size > 30 && secrets.S3_ACCESS_KEY && secrets.S3_SECRET_KEY
+      - name: Set Environment Variables for S3
+        if: steps.size_check.outputs.size > 30
+        env:
+          S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
+          S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
         run: |
-          echo "Archive size is over 30GB. Uploading LFS objects to S3..."
-          aws configure set aws_access_key_id ${{ secrets.S3_ACCESS_KEY }}
-          aws configure set aws_secret_access_key ${{ secrets.S3_SECRET_KEY }}
+          if [[ -z "$S3_ACCESS_KEY" || -z "$S3_SECRET_KEY" ]]; then
+            echo "Skipping LFS upload: S3 credentials not provided."
+            exit 0
+          fi
+          echo "Uploading LFS objects to S3..."
+          aws configure set aws_access_key_id "$S3_ACCESS_KEY"
+          aws configure set aws_secret_access_key "$S3_SECRET_KEY"
           aws configure set default.region us-east-1
           aws s3 cp "/tmp/${{ inputs.repo_name }}_lfs" "s3://your-lfs-bucket/${{ inputs.repo_name }}/" --recursive
 
       - name: Import Repository
         run: |
           IMPORT_OPTIONS=""
-          if [[ "${{ secrets.S3_ACCESS_KEY }}" && "${{ secrets.S3_SECRET_KEY }}" && steps.size_check.outputs.size -gt 30 ]]; then
+          if [[ -n "${{ secrets.S3_ACCESS_KEY }}" && -n "${{ secrets.S3_SECRET_KEY }}" && steps.size_check.outputs.size -gt 30 ]]; then
             IMPORT_OPTIONS="--include-lfs --lfs-storage-url s3://your-lfs-bucket/${{ inputs.repo_name }}/"
           fi
           echo "Importing repository..."
