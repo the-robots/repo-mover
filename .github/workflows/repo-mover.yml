@@ -49,7 +49,7 @@ jobs:
               process.exit(1);
             }
 
-            // Corrected the syntax for appendFileSync
+            // Corrected syntax: removed any misplaced commas
             fs.appendFileSync(outputPath, `jwt=${jwt}\n`, { encoding: 'utf8' });
           }).catch(error => {
             console.error('Failed to generate JWT:', error);
