@@ -45,6 +45,7 @@ jobs:
           node -e "
           const { createAppAuth } = require('@octokit/auth-app');
           const fs = require('fs');
+          const outputPath = process.env.GITHUB_OUTPUT;
 
           try {
             const auth = createAppAuth({
@@ -55,13 +56,12 @@ jobs:
             auth({ type: 'app' }).then(appAuth => {
               const jwt = appAuth.token;
 
-              const outputPath = process.env.GITHUB_OUTPUT;
               if (!outputPath) {
                 console.error('GITHUB_OUTPUT is not defined.');
                 process.exit(1);
               }
 
-              // Correct fs.appendFileSync usage
+              // Correctly write JWT to GITHUB_OUTPUT
               fs.appendFileSync(outputPath, `jwt=${jwt}\n`, { encoding: 'utf8' });
 
               console.log('JWT successfully generated and written to output.');
