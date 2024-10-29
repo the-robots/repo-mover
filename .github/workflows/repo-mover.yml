@@ -16,6 +16,7 @@ on:
 jobs:
   migrate:
     runs-on: ubuntu-latest
+
     steps:
       - name: Set up Node.js environment
         uses: actions/setup-node@v3
@@ -23,8 +24,7 @@ jobs:
           node-version: '16'
 
       - name: Install Dependencies
-        run: |
-          npm install @octokit/app
+        run: npm install @octokit/app@12.0.3
 
       - name: Generate JWT for GitHub App
         id: auth
@@ -33,7 +33,10 @@ jobs:
           node -e "
           const { App } = require('@octokit/app');
           const fs = require('fs');
-          const app = new App({ appId: ${{ secrets.APP_ID }}, privateKey: fs.readFileSync('private-key.pem', 'utf8') });
+          const app = new App({
+            appId: process.env.APP_ID,
+            privateKey: fs.readFileSync('private-key.pem', 'utf8'),
+          });
           const jwt = app.getSignedJsonWebToken();
           console.log(`::set-output name=jwt::${jwt}`);
           "
