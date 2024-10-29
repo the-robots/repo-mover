@@ -18,23 +18,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out Repository
-        uses: actions/checkout@v3
+      - name: Set up Node.js environment
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
 
-      - name: Install GPG and Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gnupg
-
-      - name: Decrypt Private Key
-        env:
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: |
-          gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
-            -o private-key.pem \
-            -d .github/keys/repo-sidewinder.2024-10-29.private-key.pem.gpg
-
-      - name: Install Octokit Dependencies
+      - name: Install Dependencies
         run: npm install @octokit/app@12.0.3 @octokit/auth-app@3.0.0
 
       - name: Generate JWT for GitHub App
@@ -45,6 +34,7 @@ jobs:
           node -e "
           const { createAppAuth } = require('@octokit/auth-app');
           const fs = require('fs');
+          const outputPath = process.env.GITHUB_OUTPUT;
 
           const auth = createAppAuth({
             appId: process.env.APP_ID,
@@ -53,8 +43,13 @@ jobs:
 
           auth({ type: 'app' }).then(appAuth => {
             const jwt = appAuth.token;
-            const outputPath = process.env.GITHUB_OUTPUT;
-            fs.appendFileSync(outputPath, `jwt=${jwt}\n`);
+
+            if (!outputPath) {
+              console.error('GITHUB_OUTPUT is not defined.');
+              process.exit(1);
+            }
+
+            fs.appendFileSync(outputPath, `jwt=${jwt}\n`, 'utf8');
           }).catch(error => {
             console.error('Failed to generate JWT:', error);
             process.exit(1);
