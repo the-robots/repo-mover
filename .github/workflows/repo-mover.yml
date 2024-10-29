@@ -26,13 +26,15 @@ jobs:
       - name: Install Dependencies
         run: npm install @octokit/app@12.0.3 @octokit/auth-app@3.0.0
 
+      - name: Decode Private Key
+        run: |
+          echo "${{ secrets.PRIVATE_KEY_BASE64 }}" | base64 --decode > private-key.pem
+
       - name: Generate JWT for GitHub App
         id: auth
         env:
           APP_ID: ${{ secrets.APP_ID }}
-          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
         run: |
-          echo "$PRIVATE_KEY" > private-key.pem
           node -e "
           const { createAppAuth } = require('@octokit/auth-app');
           const fs = require('fs');
@@ -44,7 +46,7 @@ jobs:
 
           auth({ type: 'app' }).then(appAuth => {
             const jwt = appAuth.token;
-            const outputPath = process.env.GITHUB_OUTPUT;  // Correct usage of GITHUB_OUTPUT
+            const outputPath = process.env.GITHUB_OUTPUT;
             fs.appendFileSync(outputPath, `jwt=${jwt}\n`);
           }).catch(error => {
             console.error('Failed to generate JWT:', error);
