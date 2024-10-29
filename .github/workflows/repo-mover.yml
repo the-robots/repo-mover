@@ -22,6 +22,10 @@ jobs:
         with:
           node-version: '16'
 
+      - name: Install Dependencies
+        run: |
+          npm install @octokit/app
+
       - name: Generate JWT for GitHub App
         id: auth
         run: |
@@ -51,36 +55,9 @@ jobs:
           echo "Exporting repository..."
           gh gei archive create "${{ inputs.source_org }}/${{ inputs.repo_name }}" --output "$ARCHIVE_PATH"
 
-      - name: Check Archive Size
-        id: size_check
-        run: |
-          SIZE=$(du -BG "$ARCHIVE_PATH" | cut -f1 | tr -d 'G')
-          echo "::set-output name=size::$SIZE"
-
-      - name: Set Environment Variables for S3
-        if: steps.size_check.outputs.size > 30
-        env:
-          S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
-          S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
-        run: |
-          if [[ -z "$S3_ACCESS_KEY" || -z "$S3_SECRET_KEY" ]]; then
-            echo "Skipping LFS upload: S3 credentials not provided."
-            exit 0
-          fi
-          echo "Uploading LFS objects to S3..."
-          aws configure set aws_access_key_id "$S3_ACCESS_KEY"
-          aws configure set aws_secret_access_key "$S3_SECRET_KEY"
-          aws configure set default.region us-east-1
-          aws s3 cp "/tmp/${{ inputs.repo_name }}_lfs" "s3://your-lfs-bucket/${{ inputs.repo_name }}/" --recursive
-
       - name: Import Repository
         run: |
-          IMPORT_OPTIONS=""
-          if [[ -n "${{ secrets.S3_ACCESS_KEY }}" && -n "${{ secrets.S3_SECRET_KEY }}" && steps.size_check.outputs.size -gt 30 ]]; then
-            IMPORT_OPTIONS="--include-lfs --lfs-storage-url s3://your-lfs-bucket/${{ inputs.repo_name }}/"
-          fi
-          echo "Importing repository..."
-          gh gei import "$ARCHIVE_PATH" --target "${{ inputs.target_org }}/${{ inputs.repo_name }}" $IMPORT_OPTIONS
+          gh gei import "$ARCHIVE_PATH" --target "${{ inputs.target_org }}/${{ inputs.repo_name }}"
 
       - name: Cleanup
         run: rm -f private-key.pem "$ARCHIVE_PATH"
