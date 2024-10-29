@@ -1,0 +1,70 @@
+name: Migrate Repository
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_org:
+        description: 'Source organization'
+        required: true
+      target_org:
+        description: 'Target organization'
+        required: true
+      repo_name:
+        description: 'Repository name'
+        required: true
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Node.js environment
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Authenticate GitHub App
+        id: auth
+        run: |
+          echo "${{ secrets.PRIVATE_KEY }}" > private-key.pem
+          node -e "
+          const { App } = require('@octokit/app');
+          const fs = require('fs');
+          const app = new App({ appId: ${{ secrets.APP_ID }}, privateKey: fs.readFileSync('private-key.pem', 'utf8') });
+          const jwt = app.getSignedJsonWebToken();
+          console.log(`::set-output name=jwt::${jwt}`);
+          "
+
+      - name: Export Repository
+        run: |
+          jwt="${{ steps.auth.outputs.jwt }}"
+          gh auth login --with-token <<< "$jwt"
+          ARCHIVE_PATH="/tmp/${{ inputs.repo_name }}.tar.gz"
+          echo "Exporting repository..."
+          gh gei archive create "${{ inputs.source_org }}/${{ inputs.repo_name }}" --output "$ARCHIVE_PATH"
+
+      - name: Check Archive Size
+        id: size_check
+        run: |
+          SIZE=$(du -BG "$ARCHIVE_PATH" | cut -f1 | tr -d 'G')
+          echo "::set-output name=size::$SIZE"
+
+      - name: Conditionally Upload LFS Objects to S3
+        if: steps.size_check.outputs.size > 30 && secrets.S3_ACCESS_KEY && secrets.S3_SECRET_KEY
+        run: |
+          echo "Archive size is over 30GB. Uploading LFS objects to S3..."
+          aws configure set aws_access_key_id ${{ secrets.S3_ACCESS_KEY }}
+          aws configure set aws_secret_access_key ${{ secrets.S3_SECRET_KEY }}
+          aws configure set default.region us-east-1
+          aws s3 cp "/tmp/${{ inputs.repo_name }}_lfs" "s3://your-lfs-bucket/${{ inputs.repo_name }}/" --recursive
+
+      - name: Import Repository
+        run: |
+          IMPORT_OPTIONS=""
+          if [[ "${{ secrets.S3_ACCESS_KEY }}" && "${{ secrets.S3_SECRET_KEY }}" && steps.size_check.outputs.size -gt 30 ]]; then
+            IMPORT_OPTIONS="--include-lfs --lfs-storage-url s3://your-lfs-bucket/${{ inputs.repo_name }}/"
+          fi
+          echo "Importing repository..."
+          gh gei import "$ARCHIVE_PATH" --target "${{ inputs.target_org }}/${{ inputs.repo_name }}" $IMPORT_OPTIONS
+
+      - name: Cleanup
+        run: rm -f private-key.pem "$ARCHIVE_PATH"
