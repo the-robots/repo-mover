@@ -44,7 +44,8 @@ jobs:
 
           auth({ type: 'app' }).then(appAuth => {
             const jwt = appAuth.token;
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, `jwt=${jwt}\n`);
+            const outputPath = process.env.GITHUB_OUTPUT;  // Correct usage of GITHUB_OUTPUT
+            fs.appendFileSync(outputPath, `jwt=${jwt}\n`);
           }).catch(error => {
             console.error('Failed to generate JWT:', error);
             process.exit(1);
