@@ -102,8 +102,10 @@ jobs:
       - name: Export Repository
         run: |
           ARCHIVE_PATH="/tmp/${{ inputs.repo_name }}.tar.gz"
+          TOKEN=$(cat $GITHUB_OUTPUT | grep 'token=' | cut -d '=' -f2)
+          
           echo "Exporting repository..."
-          curl -H "Authorization: token $(cat $GITHUB_OUTPUT | grep 'token=' | cut -d '=' -f2)" \
+          curl -H "Authorization: token $TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             -o "$ARCHIVE_PATH" \
             https://api.github.com/repos/${{ inputs.source_org }}/${{ inputs.repo_name }}/tarball
@@ -111,11 +113,13 @@ jobs:
       - name: Import Repository
         run: |
           ARCHIVE_PATH="/tmp/${{ inputs.repo_name }}.tar.gz"
+          TOKEN=$(cat $GITHUB_OUTPUT | grep 'token=' | cut -d '=' -f2)
+
           echo "Importing repository..."
-          curl -X POST -H "Authorization: token $(cat $GITHUB_OUTPUT | grep 'token=' | cut -d '=' -f2)" \
+          curl -X PUT -H "Authorization: token $TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
-            -d '{"name":"'"${{ inputs.repo_name }}"'"}' \
-            https://api.github.com/orgs/${{ inputs.target_org }}/repos
+            --data-binary @"$ARCHIVE_PATH" \
+            https://api.github.com/repos/${{ inputs.target_org }}/${{ inputs.repo_name }}
 
       - name: Cleanup
         run: rm -f private-key.pem "$ARCHIVE_PATH"
