@@ -124,7 +124,10 @@ jobs:
 
       - name: Grant Migration Role
         run: |
-          gh gei grant-migrator-role --user "${{ github.actor }}" --target-org "${{ inputs.target_org }}"
+          gh gei grant-migrator-role \
+          --github-org "${{ inputs.target_org }}" \
+          --actor "${{ github.actor }}" \
+          --actor-type "user"
 
       - name: Import Repository using gh gei
         env:
