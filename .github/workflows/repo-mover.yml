@@ -110,16 +110,21 @@ jobs:
             -o "$ARCHIVE_PATH" \
             https://api.github.com/repos/${{ inputs.source_org }}/${{ inputs.repo_name }}/tarball
 
+      - name: Set GH_TOKEN Environment Variable
+        run: |
+          export GH_TOKEN=$(cat $GITHUB_OUTPUT | grep 'token=' | cut -d '=' -f2)
+          echo "GH_TOKEN is set."
+
       - name: Install GitHub Enterprise Importer CLI
         env:
-          GH_TOKEN: $(cat $GITHUB_OUTPUT | grep 'token=' | cut -d '=' -f2)
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Installing gh-gei..."
           gh extension install github/gh-gei
 
       - name: Import Repository using gh gei
         env:
-          GH_TOKEN: $(cat $GITHUB_OUTPUT | grep 'token=' | cut -d '=' -f2)
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ARCHIVE_PATH="/tmp/${{ inputs.repo_name }}.tar.gz"
           echo "Importing repository using gh gei..."
