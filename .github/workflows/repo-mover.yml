@@ -114,7 +114,7 @@ jobs:
           echo "Importing repository..."
           curl -X POST -H "Authorization: token $(cat $GITHUB_OUTPUT | grep 'token=' | cut -d '=' -f2)" \
             -H "Accept: application/vnd.github.v3+json" \
-            -F "archive=@${ARCHIVE_PATH}" \
+            -d '{"name":"'"${{ inputs.repo_name }}"'"}' \
             https://api.github.com/orgs/${{ inputs.target_org }}/repos
 
       - name: Cleanup
