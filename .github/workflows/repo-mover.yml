@@ -128,7 +128,7 @@ jobs:
         run: |
           ARCHIVE_PATH="/tmp/${{ inputs.repo_name }}.tar.gz"
           echo "Importing repository using gh gei..."
-          gh gei import --source-archive "$ARCHIVE_PATH" \
+          gh gei migrate-repo --source-archive "$ARCHIVE_PATH" \
             --target "${{ inputs.target_org }}/${{ inputs.repo_name }}" \
             --github-token "$GH_TOKEN"
 
