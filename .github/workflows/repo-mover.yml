@@ -115,16 +115,16 @@ jobs:
           export GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
           echo "GH_TOKEN is set."
 
-      - name: Grant Migration Role
-        run: |
-          gh gei grant-migrator-role --user "${{ github.actor }}" --target-org "${{ inputs.target_org }}"
-
       - name: Install GitHub Enterprise Importer CLI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Installing gh-gei..."
           gh extension install github/gh-gei
+
+      - name: Grant Migration Role
+        run: |
+          gh gei grant-migrator-role --user "${{ github.actor }}" --target-org "${{ inputs.target_org }}"
 
       - name: Import Repository using gh gei
         env:
