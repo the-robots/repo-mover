@@ -110,6 +110,11 @@ jobs:
             -o "$ARCHIVE_PATH" \
             https://api.github.com/repos/${{ inputs.source_org }}/${{ inputs.repo_name }}/tarball
 
+      - name: Install GitHub Enterprise Importer CLI
+        run: |
+          echo "Installing gh-gei..."
+          gh extension install github/gh-gei
+
       - name: Import Repository using gh gei
         run: |
           ARCHIVE_PATH="/tmp/${{ inputs.repo_name }}.tar.gz"
