@@ -112,8 +112,12 @@ jobs:
 
       - name: Set GH_TOKEN Environment Variable
         run: |
-          export GH_TOKEN=$(cat $GITHUB_OUTPUT | grep 'token=' | cut -d '=' -f2)
+          export GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
           echo "GH_TOKEN is set."
+
+      - name: Grant Migration Role
+        run: |
+          gh gei grant-migrator-role --user "${{ github.actor }}" --target-org "${{ inputs.target_org }}"
 
       - name: Install GitHub Enterprise Importer CLI
         env:
@@ -135,7 +139,6 @@ jobs:
           --target-repo "${{ inputs.repo_name }}" \
           --github-source-pat "$GH_TOKEN" \
           --github-target-pat "$GH_TOKEN" --verbose
-
 
       - name: Cleanup
         run: rm -f private-key.pem "$ARCHIVE_PATH"
