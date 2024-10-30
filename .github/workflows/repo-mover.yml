@@ -129,12 +129,13 @@ jobs:
           ARCHIVE_PATH="/tmp/${{ inputs.repo_name }}.tar.gz"
           echo "Importing repository using gh gei..."
           gh gei migrate-repo \
-            --github-source-org "${{ inputs.source_org }}" \
-            --source-repo "${{ inputs.repo_name }}" \
-            --github-target-org "${{ inputs.target_org }}" \
-            --target-repo "${{ inputs.repo_name }}" \
-            --github-source-pat "$GH_TOKEN" \
-            --github-target-pat "$GH_TOKEN"
+          --github-source-org "${{ inputs.source_org }}" \
+          --source-repo "${{ inputs.repo_name }}" \
+          --github-target-org "${{ inputs.target_org }}" \
+          --target-repo "${{ inputs.repo_name }}" \
+          --github-source-pat "$GH_TOKEN" \
+          --github-target-pat "$GH_TOKEN" --verbose
+
 
       - name: Cleanup
         run: rm -f private-key.pem "$ARCHIVE_PATH"
