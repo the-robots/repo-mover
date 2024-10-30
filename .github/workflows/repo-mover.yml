@@ -110,16 +110,15 @@ jobs:
             -o "$ARCHIVE_PATH" \
             https://api.github.com/repos/${{ inputs.source_org }}/${{ inputs.repo_name }}/tarball
 
-      - name: Import Repository
+      - name: Import Repository using gh gei
         run: |
           ARCHIVE_PATH="/tmp/${{ inputs.repo_name }}.tar.gz"
           TOKEN=$(cat $GITHUB_OUTPUT | grep 'token=' | cut -d '=' -f2)
 
-          echo "Importing repository..."
-          curl -X PUT -H "Authorization: token $TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            --data-binary @"$ARCHIVE_PATH" \
-            https://api.github.com/repos/${{ inputs.target_org }}/${{ inputs.repo_name }}
+          echo "Importing repository using gh gei..."
+          gh gei import --source-archive "$ARCHIVE_PATH" \
+            --target "${{ inputs.target_org }}/${{ inputs.repo_name }}" \
+            --github-token "$TOKEN"
 
       - name: Cleanup
         run: rm -f private-key.pem "$ARCHIVE_PATH"
