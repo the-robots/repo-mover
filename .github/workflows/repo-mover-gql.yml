@@ -31,41 +31,44 @@ jobs:
           sudo apt-get install -y jq
 
       - name: Fetch Target Organization ID
-        id: fetch_org_id
         env:
           GH_TOKEN: ${{ env.GH_TOKEN }}
-          TARGET_ORG: ${{ env.TARGET_ORG }}
         run: |
           ORG_ID=$(curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
-          -d '{"query": "query { organization(login: \"'$TARGET_ORG'\") { id } }"}' https://api.github.com/graphql | jq -r '.data.organization.id')
+          -d '{"query": "query { organization(login: \"'"${{ inputs.target_org }}"'\") { id } }"}' https://api.github.com/graphql | jq -r '.data.organization.id')
           echo "ORG_ID=$ORG_ID" >> $GITHUB_ENV
-          echo "::set-output name=ORG_ID::$ORG_ID"
+          echo "Fetched Organization ID: $ORG_ID"
 
       - name: Initiate Repository Migration
         env:
           GH_TOKEN: ${{ env.GH_TOKEN }}
-          ORG_ID: ${{ steps.fetch_org_id.outputs.ORG_ID }}
+          ORG_ID: ${{ env.ORG_ID }}
           SOURCE_ORG: ${{ env.SOURCE_ORG }}
           REPO_NAME: ${{ env.REPO_NAME }}
         run: |
           SOURCE_REPO_URL="https://github.com/$SOURCE_ORG/$REPO_NAME"
           TARGET_REPO_NAME="$REPO_NAME"
-          curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
+          MIGRATION_ID=$(curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
           -d '{
-            "query": "mutation { startRepositoryMigration(input: { sourceRepositoryUrl: \"'$SOURCE_REPO_URL'\", targetRepositoryName: \"'$TARGET_REPO_NAME'\", targetOwnerId: \"'$ORG_ID'\" }) { repositoryMigration { id } } }"
-          }' https://api.github.com/graphql | jq -r '.data.startRepositoryMigration.repositoryMigration.id' > migration_id.txt
-          echo "Migration initiated. Migration ID: $(cat migration_id.txt)"
+            "query": "mutation { startRepositoryMigration(input: { sourceRepositoryUrl: \"'"$SOURCE_REPO_URL"'\", targetRepositoryName: \"'"$TARGET_REPO_NAME"'\", targetOwnerId: \"'"$ORG_ID"'\" }) { repositoryMigration { id } } }"
+          }' https://api.github.com/graphql | jq -r '.data.startRepositoryMigration.repositoryMigration.id')
+          echo "Migration initiated with ID: $MIGRATION_ID"
+          echo "MIGRATION_ID=$MIGRATION_ID" >> $GITHUB_ENV
 
       - name: Monitor Migration Status
         env:
           GH_TOKEN: ${{ env.GH_TOKEN }}
+          MIGRATION_ID: ${{ env.MIGRATION_ID }}
         run: |
-          MIGRATION_ID=$(cat migration_id.txt)
+          if [ -z "$MIGRATION_ID" ]; then
+            echo "Migration ID is empty. Exiting with failure."
+            exit 1
+          fi
           STATUS="PENDING"
           while [ "$STATUS" != "SUCCEEDED" ] && [ "$STATUS" != "FAILED" ]; do
             STATUS=$(curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
             -d '{
-              "query": "query { node(id: \"'$MIGRATION_ID'\") { ... on RepositoryMigration { status } } }"
+              "query": "query { node(id: \"'"$MIGRATION_ID"'\") { ... on RepositoryMigration { status } } }"
             }' https://api.github.com/graphql | jq -r '.data.node.status')
             echo "Current migration status: $STATUS"
             if [ "$STATUS" != "SUCCEEDED" ] && [ "$STATUS" != "FAILED" ]; then
