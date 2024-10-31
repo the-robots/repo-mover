@@ -57,9 +57,10 @@ jobs:
           REPO_ID: ${{ env.REPO_ID }}
           REPO_NAME: ${{ env.REPO_NAME }}
         run: |
+          TARGET_REPO_NAME="$REPO_NAME"
           RESPONSE=$(curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
           -d '{
-            "query": "mutation { startRepositoryMigration(input: { sourceRepositoryId: \"'"$REPO_ID"'\", targetRepositoryName: \"'"$REPO_NAME"'\", targetOwnerId: \"'"$ORG_ID"'\" }) { repositoryMigration { id } } }"
+            "query": "mutation { startRepositoryMigration(input: { sourceRepositoryId: \"'"$REPO_ID"'\", targetRepositoryName: \"'"$TARGET_REPO_NAME"'\", targetOwnerId: \"'"$ORG_ID"'\" }) { repositoryMigration { id } } }"
           }' https://api.github.com/graphql)
           echo "Full response from startRepositoryMigration: $RESPONSE"
           MIGRATION_ID=$(echo "$RESPONSE" | jq -r '.data.startRepositoryMigration.repositoryMigration.id')
