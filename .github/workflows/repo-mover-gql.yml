@@ -37,94 +37,28 @@ jobs:
       - name: Install Octokit Dependencies
         run: npm install @octokit/app@12.0.3 @octokit/auth-app@3.0.0
 
-      - name: Generate JWT for GitHub App
-        id: auth
-        env:
-          APP_ID: ${{ secrets.APP_ID }}
-        run: |
-          node -e "
-          const { createAppAuth } = require('@octokit/auth-app');
-          const fs = require('fs');
-
-          try {
-            const auth = createAppAuth({
-              appId: process.env.APP_ID,
-              privateKey: fs.readFileSync('private-key.pem', 'utf8'),
-            });
-
-            auth({ type: 'app' }).then(appAuth => {
-              const jwt = appAuth.token;
-
-              const outputPath = process.env.GITHUB_OUTPUT;
-              if (!outputPath) {
-                console.error('GITHUB_OUTPUT is not defined.');
-                process.exit(1);
-              }
-
-              fs.appendFileSync(outputPath, 'jwt=' + jwt + '\n', { encoding: 'utf8' });
-              console.log('JWT successfully generated: ', jwt);
-            }).catch(error => {
-              console.error('Failed to generate JWT:', error);
-              process.exit(1);
-            });
-
-          } catch (err) {
-            console.error('Unexpected error:', err);
-            process.exit(1);
-          }
-          "
-
-      - name: Exchange JWT for Installation Token
-        id: token
-        run: |
-          INSTALLATION_ID=$(curl -s -H "Authorization: Bearer ${{ steps.auth.outputs.jwt }}" \
-            -H "Accept: application/vnd.github.v3+json" https://api.github.com/app/installations | jq '.[0].id')
-
-          if [ -z "$INSTALLATION_ID" ]; then
-            echo "Error: Installation ID not found."
-            exit 1
-          fi
-
-          echo "Found Installation ID: $INSTALLATION_ID"
-
-          INSTALLATION_TOKEN=$(curl -s -X POST -H "Authorization: Bearer ${{ steps.auth.outputs.jwt }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens | jq -r '.token')
-
-          if [ -z "$INSTALLATION_TOKEN" ] || [ "$INSTALLATION_TOKEN" == "null" ]; then
-            echo "Error: Installation token retrieval failed."
-            exit 1
-          fi
-
-          echo "Installation token successfully retrieved."
-          echo "token=${INSTALLATION_TOKEN}" >> $GITHUB_OUTPUT
-
       - name: Set GH_TOKEN Environment Variable
         run: |
           echo "Setting GH_TOKEN..."
-          echo "GH_TOKEN=$(cat $GITHUB_OUTPUT | grep 'token=' | cut -d '=' -f2)" >> $GITHUB_ENV
+          echo "GH_TOKEN=${{ secrets.PAT_TOKEN }}" >> $GITHUB_ENV
 
       - name: Initiate Migration with GraphQL
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          ARCHIVE_PATH="/tmp/${{ inputs.repo_name }}.tar.gz"
-          TOKEN=$(cat $GITHUB_OUTPUT | grep 'token=' | cut -d '=' -f2)
-
-          # Start the migration using GraphQL API
-          echo "Initiating migration..."
-          curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+          echo "Initiating migration with GraphQL..."
+          curl -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
           -d '{
             "query": "mutation { createMigrationSource(input: { name: \"${{ inputs.repo_name }}\", url: \"https://github.com/${{ inputs.source_org }}/${{ inputs.repo_name }}\", ownerId: \"${{ inputs.target_org }}\", type: GITHUB_ARCHIVE }) { migrationSource { id } } }"
           }' https://api.github.com/graphql
 
       - name: Monitor Migration Status (optional)
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           # Placeholder for monitoring migration completion
           echo "Checking migration status..."
           # Add code to query the migration status using GraphQL if needed
 
       - name: Cleanup
-        run: rm -f private-key.pem "$ARCHIVE_PATH"
+        run: rm -f private-key.pem
