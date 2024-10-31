@@ -48,10 +48,12 @@ jobs:
         run: |
           SOURCE_REPO_URL="https://github.com/$SOURCE_ORG/$REPO_NAME"
           TARGET_REPO_NAME="$REPO_NAME"
-          MIGRATION_ID=$(curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
+          RESPONSE=$(curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
           -d '{
             "query": "mutation { startRepositoryMigration(input: { sourceRepositoryUrl: \"'"$SOURCE_REPO_URL"'\", targetRepositoryName: \"'"$TARGET_REPO_NAME"'\", targetOwnerId: \"'"$ORG_ID"'\" }) { repositoryMigration { id } } }"
-          }' https://api.github.com/graphql | jq -r '.data.startRepositoryMigration.repositoryMigration.id')
+          }' https://api.github.com/graphql)
+          echo "Full response from startRepositoryMigration: $RESPONSE"
+          MIGRATION_ID=$(echo "$RESPONSE" | jq -r '.data.startRepositoryMigration.repositoryMigration.id')
           echo "Migration initiated with ID: $MIGRATION_ID"
           echo "MIGRATION_ID=$MIGRATION_ID" >> $GITHUB_ENV
 
