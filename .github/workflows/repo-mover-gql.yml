@@ -1,4 +1,4 @@
-name: Migrate Repository - GQL
+name: Migrate Repository
 
 on:
   workflow_dispatch:
@@ -18,61 +18,63 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out Repository
-        uses: actions/checkout@v3
+      - name: Set Up Environment Variables
+        run: |
+          echo "GH_TOKEN=${{ secrets.PAT_TOKEN }}" >> $GITHUB_ENV
+          echo "SOURCE_ORG=${{ inputs.source_org }}" >> $GITHUB_ENV
+          echo "TARGET_ORG=${{ inputs.target_org }}" >> $GITHUB_ENV
+          echo "REPO_NAME=${{ inputs.repo_name }}" >> $GITHUB_ENV
 
-      - name: Install GPG and Dependencies
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gnupg jq
+          sudo apt-get install -y jq
 
-      - name: Decrypt Private Key
+      - name: Fetch Target Organization ID
+        id: fetch_org_id
         env:
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GH_TOKEN: ${{ env.GH_TOKEN }}
+          TARGET_ORG: ${{ env.TARGET_ORG }}
         run: |
-          gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
-            -o private-key.pem \
-            -d .github/keys/repo-sidewinder.2024-10-29.private-key.pem.gpg
-
-      - name: Install Octokit Dependencies
-        run: npm install @octokit/app@12.0.3 @octokit/auth-app@3.0.0
-
-      - name: Set GH_TOKEN Environment Variable
-        run: |
-          echo "Setting GH_TOKEN..."
-          echo "GH_TOKEN=${{ secrets.PAT_TOKEN }}" >> $GITHUB_ENV
-
-      - name: Fetch Organization ID
-        id: org_id
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          echo "Fetching the global ID of the target organization..."
-          ORG_DATA=$(curl -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
-          -d '{"query": "query { organization(login: \"'${{ inputs.target_org }}'\") { id next_global_id } }"}' https://api.github.com/graphql)
-          # Extract both the deprecated id and the next_global_id if available
-          ORG_ID=$(echo "$ORG_DATA" | jq -r '.data.organization.next_global_id // .data.organization.id')
-          echo "Using ORG_ID: $ORG_ID"
+          ORG_ID=$(curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
+          -d '{"query": "query { organization(login: \"'$TARGET_ORG'\") { id } }"}' https://api.github.com/graphql | jq -r '.data.organization.id')
           echo "ORG_ID=$ORG_ID" >> $GITHUB_ENV
+          echo "::set-output name=ORG_ID::$ORG_ID"
 
-      - name: Initiate Migration with GraphQL
+      - name: Initiate Repository Migration
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-          ORG_ID: ${{ env.ORG_ID }}
+          GH_TOKEN: ${{ env.GH_TOKEN }}
+          ORG_ID: ${{ steps.fetch_org_id.outputs.ORG_ID }}
+          SOURCE_ORG: ${{ env.SOURCE_ORG }}
+          REPO_NAME: ${{ env.REPO_NAME }}
         run: |
-          echo "Initiating migration with GraphQL using ORG_ID=$ORG_ID..."
-          curl -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
-          -d "{
-            \"query\": \"mutation { createMigrationSource(input: { name: \\\"${{ inputs.repo_name }}\\\", url: \\\"https://github.com/${{ inputs.source_org }}/${{ inputs.repo_name }}\\\", ownerId: \\\"$ORG_ID\\\", type: GITHUB_ARCHIVE }) { migrationSource { id } } }\"
-          }" https://api.github.com/graphql
+          SOURCE_REPO_URL="https://github.com/$SOURCE_ORG/$REPO_NAME"
+          TARGET_REPO_NAME="$REPO_NAME"
+          curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
+          -d '{
+            "query": "mutation { startRepositoryMigration(input: { sourceRepositoryUrl: \"'$SOURCE_REPO_URL'\", targetRepositoryName: \"'$TARGET_REPO_NAME'\", targetOwnerId: \"'$ORG_ID'\" }) { repositoryMigration { id } } }"
+          }' https://api.github.com/graphql | jq -r '.data.startRepositoryMigration.repositoryMigration.id' > migration_id.txt
+          echo "Migration initiated. Migration ID: $(cat migration_id.txt)"
 
-      - name: Monitor Migration Status (optional)
+      - name: Monitor Migration Status
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ env.GH_TOKEN }}
         run: |
-          # Placeholder for monitoring migration completion
-          echo "Checking migration status..."
-          # Add code to query the migration status using GraphQL if needed
-
-      - name: Cleanup
-        run: rm -f private-key.pem
+          MIGRATION_ID=$(cat migration_id.txt)
+          STATUS="PENDING"
+          while [ "$STATUS" != "SUCCEEDED" ] && [ "$STATUS" != "FAILED" ]; do
+            STATUS=$(curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
+            -d '{
+              "query": "query { node(id: \"'$MIGRATION_ID'\") { ... on RepositoryMigration { status } } }"
+            }' https://api.github.com/graphql | jq -r '.data.node.status')
+            echo "Current migration status: $STATUS"
+            if [ "$STATUS" != "SUCCEEDED" ] && [ "$STATUS" != "FAILED" ]; then
+              sleep 10
+            fi
+          done
+          if [ "$STATUS" == "SUCCEEDED" ]; then
+            echo "Migration completed successfully."
+          else
+            echo "Migration failed."
+            exit 1
+          fi
