@@ -48,15 +48,17 @@ jobs:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           echo "Fetching the global ID of the target organization..."
-          ORG_ID=$(curl -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
-          -d '{"query": "query { organization(login: \"'${{ inputs.target_org }}'\") { id } }"}' https://api.github.com/graphql | jq -r '.data.organization.id')
+          ORG_DATA=$(curl -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
+          -d '{"query": "query { organization(login: \"'${{ inputs.target_org }}'\") { id next_global_id } }"}' https://api.github.com/graphql)
+          # Extract both the deprecated id and the next_global_id if available
+          ORG_ID=$(echo "$ORG_DATA" | jq -r '.data.organization.next_global_id // .data.organization.id')
+          echo "Using ORG_ID: $ORG_ID"
           echo "ORG_ID=$ORG_ID" >> $GITHUB_ENV
-          echo "::set-output name=ORG_ID::$ORG_ID"
 
       - name: Initiate Migration with GraphQL
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-          ORG_ID: ${{ steps.org_id.outputs.ORG_ID }}
+          ORG_ID: ${{ env.ORG_ID }}
         run: |
           echo "Initiating migration with GraphQL using ORG_ID=$ORG_ID..."
           curl -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
