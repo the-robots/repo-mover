@@ -1,4 +1,4 @@
-name: Migrate Repository
+name: Migrate Repository - GQL
 
 on:
   workflow_dispatch:
