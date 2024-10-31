@@ -42,6 +42,16 @@ jobs:
           echo "Setting GH_TOKEN..."
           echo "GH_TOKEN=${{ secrets.PAT_TOKEN }}" >> $GITHUB_ENV
 
+      - name: Fetch Organization ID
+        id: org_id
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          echo "Fetching the global ID of the target organization..."
+          ORG_ID=$(curl -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
+          -d '{"query": "query { organization(login: \"${{ inputs.target_org }}\") { id } }"}' https://api.github.com/graphql | jq -r '.data.organization.id')
+          echo "ORG_ID=$ORG_ID" >> $GITHUB_ENV
+
       - name: Initiate Migration with GraphQL
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -49,7 +59,7 @@ jobs:
           echo "Initiating migration with GraphQL..."
           curl -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
           -d '{
-            "query": "mutation { createMigrationSource(input: { name: \"${{ inputs.repo_name }}\", url: \"https://github.com/${{ inputs.source_org }}/${{ inputs.repo_name }}\", ownerId: \"${{ inputs.target_org }}\", type: GITHUB_ARCHIVE }) { migrationSource { id } } }"
+            "query": "mutation { createMigrationSource(input: { name: \"${{ inputs.repo_name }}\", url: \"https://github.com/${{ inputs.source_org }}/${{ inputs.repo_name }}\", ownerId: \"$ORG_ID\", type: GITHUB_ARCHIVE }) { migrationSource { id } } }"
           }' https://api.github.com/graphql
 
       - name: Monitor Migration Status (optional)
